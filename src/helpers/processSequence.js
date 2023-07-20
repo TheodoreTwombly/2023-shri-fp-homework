@@ -14,38 +14,80 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
- import Api from '../tools/api';
+import Api from "../tools/api";
+import {
+  allPass,
+  compose,
+  prop,
+  tap,
+  gt,
+  lt,
+  match,
+  when,
+  not,
+  tryCatch,
+  andThen,
+  partialRight,
+  otherwise,
+} from "ramda";
 
- const api = new Api();
+const api = new Api();
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
+const getLength = prop("length");
+const getMessage = prop("message");
+const getResult = prop("result");
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+const getAnimal = (value) => api.get(`https://animals.tech/${value}`, {});
+const convertToBinary = (value) =>
+  api.get("https://api.tech/numbers/base", { from: 10, to: 2, number: value });
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+const parseValueToInt = compose(Math.round, parseFloat);
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
+const isFloat = allPass([
+  compose(lt(2), getLength),
+  compose(gt(10), getLength),
+  match(/^[0-9]*\.?[0-9]*$/g),
+  compose(lt(0), parseValueToInt),
+]);
 
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
+const throwValidationError = () => {
+  throw new Error("ValidationError");
+};
+const validateValue = when(compose(not, isFloat), throwValidationError);
 
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
+const pow = partialRight(Math.pow, [2]);
+const divideByThreeRemainder = (x) => x % 3;
+
+const processSequence = ({ value, writeLog, handleSuccess, handleError }) => {
+  const hangdleErrorMessage = compose(handleError, getMessage);
+
+  const processBinaryValue = compose(
+    tap(writeLog),
+    divideByThreeRemainder,
+    tap(writeLog),
+    pow,
+    tap(writeLog),
+    getLength,
+    tap(writeLog),
+    getResult
+  );
+
+  const handleResultSuccess = compose(handleSuccess, getResult);
+
+  const processValue = compose(
+    otherwise(handleError),
+    andThen(handleResultSuccess),
+    andThen(getAnimal),
+    andThen(processBinaryValue),
+    convertToBinary,
+    tap(writeLog),
+    parseValueToInt,
+    tap(validateValue),
+    tap(writeLog)
+  );
+
+  const processSafe = tryCatch(processValue, hangdleErrorMessage);
+  processSafe(value);
+};
 
 export default processSequence;
